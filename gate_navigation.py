@@ -1,7 +1,10 @@
+"""Navigate Picar-X through a narrow gate using color detection."""
+
+from time import sleep, time
+
 from picarx import Picarx
-from time import sleep
-from vilib import Vilib
 from robot_hat import Ultrasonic
+from vilib import Vilib
 
 px = Picarx()
 ultra = Ultrasonic('D2')  # adjust port if needed
@@ -9,7 +12,8 @@ ultra = Ultrasonic('D2')  # adjust port if needed
 def clamp_number(num, a, b):
     return max(min(num, max(a, b)), min(a, b))
 
-def turn_around(speed=50, duration=1.5):
+def turn_around(speed: int = 50, duration: float = 1.6) -> None:
+    """Rotate the car by roughly 180 degrees."""
     px.set_dir_servo_angle(30)
     px.forward(speed)
     sleep(duration)
@@ -19,58 +23,67 @@ def turn_around(speed=50, duration=1.5):
     px.stop()
 
 
-def drive_forward(distance_time=2, speed=40):
+def drive_forward(distance_time: float = 1.0, speed: int = 40) -> None:
+    """Drive straight for a short, timed distance."""
     px.set_dir_servo_angle(0)
     px.forward(speed)
     sleep(distance_time)
     px.stop()
 
 
-def main():
-    Vilib.camera_start()
+def main() -> None:
+    """Turn around, search for the gate and drive through it."""
+    Vilib.camera_start(vflip=False, hflip=False)
     Vilib.display()
-    Vilib.color_detect('green')
+    Vilib.color_detect("green")
 
+    # face the gate and move a short distance forward
     turn_around()
     drive_forward()
 
-    x_angle = 0
-    dir_angle = 0
+    pan_angle = 0
+    steer = 0
 
     passed_gate = False
-    while not passed_gate:
-        if ultra.get_distance() < 10:
+    start_time = time()
+    while not passed_gate and time() - start_time < 180:
+        distance = ultra.get_distance()
+        if distance is not None and distance < 5:
             px.stop()
+            sleep(0.05)
             continue
 
-        if Vilib.detect_obj_parameter['color_n'] != 0:
-            cx = Vilib.detect_obj_parameter['color_x']
-            cw = Vilib.detect_obj_parameter['color_w']
+        if Vilib.detect_obj_parameter["color_n"] != 0:
+            cx = Vilib.detect_obj_parameter["color_x"]
+            cw = Vilib.detect_obj_parameter["color_w"]
 
             if cw > 200:
+                px.set_dir_servo_angle(0)
                 px.forward(30)
-                sleep(3)
+                sleep(4)
                 px.stop()
                 passed_gate = True
-                break
+                continue
 
-            if cx < 200:
-                dir_angle -= 1
-            elif cx > 440:
-                dir_angle += 1
+            if cx < 300:
+                steer -= 2
+            elif cx > 340:
+                steer += 2
             else:
-                dir_angle = 0
-            dir_angle = clamp_number(dir_angle, -30, 30)
-            px.set_dir_servo_angle(dir_angle)
+                steer = 0
+
+            steer = clamp_number(steer, -30, 30)
+            px.set_dir_servo_angle(steer)
             px.forward(30)
         else:
             px.stop()
-            x_angle += 5
-            if x_angle > 35:
-                x_angle = -35
-            px.set_cam_pan_angle(x_angle)
+            pan_angle += 5
+            if pan_angle > 35:
+                pan_angle = -35
+            px.set_cam_pan_angle(pan_angle)
 
         sleep(0.05)
+
 
 if __name__ == '__main__':
     try:
